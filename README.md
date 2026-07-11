@@ -41,6 +41,22 @@ Para produção, use rotas dedicadas por plataforma no mesmo deploy:
 
 A rota `POST /api/messages/process` continua disponível como endpoint genérico para testes e integrações controladas. Nela, a API usa `channel` explícito ou tenta inferir a plataforma a partir do payload nativo.
 
+Nas rotas dedicadas, a API processa a mensagem e já envia a resposta de volta para a plataforma de origem.
+
+### Credenciais necessárias
+
+**Telegram**
+
+- `TELEGRAM_BOT_TOKEN`: token do bot usado no `sendMessage`
+- `TELEGRAM_WEBHOOK_SECRET`: segredo enviado pelo header `X-Telegram-Bot-Api-Secret-Token`
+
+**WhatsApp Cloud API**
+
+- `WHATSAPP_ACCESS_TOKEN`: token da Cloud API da Meta
+- `WHATSAPP_PHONE_NUMBER_ID`: phone number id usado no endpoint `/messages`
+- `WHATSAPP_VERIFY_TOKEN`: token para o callback `GET` de verificação do webhook
+- `WHATSAPP_APP_SECRET`: app secret usado para validar `X-Hub-Signature-256`
+
 ## Testar a conversa
 
 ### WhatsApp
@@ -182,7 +198,7 @@ Para integrar com webhooks REAIS:
       - WhatsApp: `/api/webhooks/whatsapp`
       - Telegram: `/api/webhooks/telegram`
 
-3. **Sua API** (esta) processa e retorna a resposta no formato nativo
+3. **Sua API** (esta) processa, converte a resposta para o formato nativo e faz o envio para a API da plataforma
 
 4. **Seu backend** faz um POST para a API da plataforma com a resposta
 

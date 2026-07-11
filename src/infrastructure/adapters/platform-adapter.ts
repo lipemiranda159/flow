@@ -33,6 +33,11 @@ export interface NormalizedActions {
   readonly executedSteps: number;
 }
 
+export interface DenormalizeContext {
+  readonly request: PlatformRequest;
+  readonly normalizedMessage: NormalizedMessage;
+}
+
 /**
  * Adapter para conversão bidirecional entre formato da plataforma e interno
  */
@@ -50,5 +55,5 @@ export interface PlatformAdapter {
   /**
    * Converte resposta interna para formato específico da plataforma
    */
-  denormalizeResponse(response: NormalizedActions): PlatformResponse;
+  denormalizeResponse(response: NormalizedActions, context: DenormalizeContext): PlatformResponse;
 }

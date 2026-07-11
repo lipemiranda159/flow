@@ -1,4 +1,4 @@
-import type { PlatformAdapter, PlatformRequest, PlatformResponse, NormalizedMessage, NormalizedActions } from "./platform-adapter.js";
+import type { PlatformAdapter, PlatformRequest, PlatformResponse, NormalizedMessage, NormalizedActions, DenormalizeContext } from "./platform-adapter.js";
 
 /**
  * Adapter para WhatsApp Cloud API (Meta/Facebook)
@@ -65,7 +65,7 @@ export class WhatsAppAdapter implements PlatformAdapter {
     };
   }
 
-  denormalizeResponse(response: NormalizedActions): PlatformResponse {
+  denormalizeResponse(response: NormalizedActions, context: DenormalizeContext): PlatformResponse {
     // Resposta formatada para enviar DE VOLTA via Meta API
     // Este seria o formato para fazer um POST em: 
     // POST /v18.0/{phone_number_id}/messages
@@ -73,7 +73,7 @@ export class WhatsAppAdapter implements PlatformAdapter {
     return {
       // Meta espera que você faça um POST com esta estrutura
       messaging_product: "whatsapp",
-      to: undefined, // seria preenchido com o phone_number do usuário
+      to: context.normalizedMessage.externalUserId,
       type: "text",
       text: {
         body: this.formatActionsAsText(response.actions)
@@ -83,7 +83,8 @@ export class WhatsAppAdapter implements PlatformAdapter {
         conversationId: response.conversationId,
         status: response.status,
         actions: response.actions,
-        executedSteps: response.executedSteps
+        executedSteps: response.executedSteps,
+        metadata: context.normalizedMessage.metadata
       }
     };
   }

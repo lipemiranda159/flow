@@ -1,4 +1,4 @@
-import type { PlatformAdapter, PlatformRequest, PlatformResponse, NormalizedMessage, NormalizedActions } from "./platform-adapter.js";
+import type { PlatformAdapter, PlatformRequest, PlatformResponse, NormalizedMessage, NormalizedActions, DenormalizeContext } from "./platform-adapter.js";
 
 /**
  * Adapter para Telegram Bot API
@@ -62,7 +62,7 @@ export class TelegramAdapter implements PlatformAdapter {
     };
   }
 
-  denormalizeResponse(response: NormalizedActions): PlatformResponse {
+  denormalizeResponse(response: NormalizedActions, context: DenormalizeContext): PlatformResponse {
     // Resposta formatada para enviar DE VOLTA via Telegram Bot API
     // O seu bot faria um POST para:
     // POST https://api.telegram.org/bot{BOT_TOKEN}/sendMessage
@@ -74,8 +74,7 @@ export class TelegramAdapter implements PlatformAdapter {
     return {
       // Estrutura esperada pela Telegram Bot API
       method: "sendMessage",
-      // chat_id seria: metadata.telegramChatId (preenchido externamente)
-      chat_id: undefined, // Será preenchido pelo bot com o chat_id do webhook
+      chat_id: context.normalizedMessage.metadata?.telegramChatId,
       text: messageTexts.join("\n"),
       parse_mode: "HTML", // Telegram suporta HTML/Markdown
       
@@ -85,6 +84,7 @@ export class TelegramAdapter implements PlatformAdapter {
         status: response.status,
         actions: response.actions,
         executedSteps: response.executedSteps,
+        metadata: context.normalizedMessage.metadata,
         allActions: response.actions // Pode ter mais tipos de ações
       }
     };

@@ -47,7 +47,10 @@ export async function processMessageByPlatform(
   };
 
   // Desnormalizar: converter formato interno → específico da plataforma
-  const platformResponse = adapter.denormalizeResponse(normalizedResult);
+  const platformResponse = adapter.denormalizeResponse(normalizedResult, {
+    request: platformRequest,
+    normalizedMessage
+  });
 
   return platformResponse;
 }
