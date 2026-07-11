@@ -55,15 +55,23 @@ export class StructuredLogger {
 
     if (level === "error") {
       console.error(message);
-      return;
-    }
-
-    if (level === "warn") {
+    } else if (level === "warn") {
       console.warn(message);
-      return;
+    } else {
+      console.log(message);
     }
 
-    console.log(message);
+    void sendToAxiomIfEnabled(payload).catch((error) => {
+      const errorPayload = {
+        level: "warn",
+        event: "axiom_ingest_failed",
+        ...sanitizeContext({ ...this.baseContext }),
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      };
+      console.warn(JSON.stringify(errorPayload));
+    });
   }
 }
 
@@ -111,4 +119,28 @@ function sanitizeValue(key: string, value: unknown): unknown {
 
 function isSensitiveKey(key: string): boolean {
   return /(authorization|token|secret|password|cookie|api[-_]?key)/i.test(key);
+}
+
+async function sendToAxiomIfEnabled(payload: Record<string, unknown>): Promise<void> {
+  const token = process.env.AXIOM_TOKEN;
+  const dataset = process.env.AXIOM_DATASET;
+
+  if (!token || !dataset) {
+    return;
+  }
+
+  const ingestUrl = process.env.AXIOM_INGEST_URL ?? `https://api.axiom.co/v1/datasets/${dataset}/ingest`;
+
+  const response = await fetch(ingestUrl, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify([payload])
+  });
+
+  if (!response.ok) {
+    throw new Error(`Axiom ingest failed with status ${response.status}`);
+  }
 }
