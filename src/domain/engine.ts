@@ -54,9 +54,10 @@ export async function executeFlow(
       currentStepId: waiting.id,
       stepType: "input"
     });
-    const selectedValue = waiting.options
+    const selection = waiting.options
       ? resolveSelectedOption(waiting.options, incomingMessage.trim(), conversation.variables)
-      : incomingMessage.trim();
+      : undefined;
+    const selectedValue = waiting.options ? selection?.value : incomingMessage.trim();
     if (selectedValue === undefined) {
       actions.push({ type: "send_message", text: waiting.options?.invalidMessage ?? "Opção inválida." });
       const prompt = renderInputPrompt(waiting, conversation.variables);
@@ -64,6 +65,9 @@ export async function executeFlow(
       return { conversation, actions, executedSteps };
     }
     setPath(conversation.variables, waiting.saveTo, selectedValue);
+    if (waiting.options?.saveSelectedTo && selection) {
+      setPath(conversation.variables, waiting.options.saveSelectedTo, selection.option);
+    }
     logger?.info("flow_step_completed", {
       currentStepId: waiting.id,
       nextStepId: waiting.nextStepId,
@@ -282,6 +286,7 @@ type InputOptions = {
   source: string;
   labelField: string;
   valueField: string;
+  saveSelectedTo?: string;
   invalidMessage: string;
   emptyMessage: string;
 };
@@ -304,11 +309,11 @@ function resolveSelectedOption(
   config: InputOptions,
   input: string,
   variables: Record<string, unknown>
-): unknown | undefined {
+): { value: unknown; option: Record<string, unknown> } | undefined {
   if (!/^\d+$/.test(input)) return undefined;
   const selected = resolveOptions(config, variables)[Number(input) - 1];
   if (selected === undefined) return undefined;
-  return readOptionField(selected, config.valueField);
+  return { value: readOptionField(selected, config.valueField), option: structuredClone(selected) };
 }
 
 function resolveOptions(config: InputOptions, variables: Record<string, unknown>): Record<string, unknown>[] {
@@ -325,4 +330,5 @@ function readOptionField(option: Record<string, unknown>, path: string): unknown
   if (value === undefined || value === null || typeof value === "object") throw new Error(`Campo de opção inválido: ${path}`);
   return value;
 }
+
 

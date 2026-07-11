@@ -22,6 +22,7 @@ export const exampleFlow = flowSchema.parse({
     scheduling: {
       businessId: null,
       procedureId: null,
+      selectedProcedure: null,
       professionalId: null,
       requestedDate: null,
       scheduledAt: null,
@@ -228,7 +229,7 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.procedures",
       onErrorStepId: "auth-failed",
-      nextStepId: "schedule-procedure-select-prompt"
+      nextStepId: "schedule-procedure-id"
     },
     {
       id: "schedule-procedure-select-prompt",
@@ -240,7 +241,13 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-procedure-id",
       type: "input",
       saveTo: "scheduling.procedureId",
-      prompt: "Digite o procedureId escolhido na lista.",
+      prompt: "Estes são os procedimentos disponíveis. Escolha uma opção:",
+      options: {
+        source: "${conversation.catalog.procedures.data.data.procedures}",
+        labelField: "name",
+        valueField: "id",
+        saveSelectedTo: "scheduling.selectedProcedure"
+      },
       nextStepId: "schedule-professionals-instructions"
     },
     {
@@ -448,12 +455,25 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.procedures",
       onErrorStepId: "auth-failed",
+      nextStepId: "procedures-select"
+    },
+    {
+      id: "procedures-select",
+      type: "input",
+      saveTo: "scheduling.procedureId",
+      prompt: "Estes são os procedimentos disponíveis. Escolha uma opção:",
+      options: {
+        source: "${conversation.catalog.procedures.data.data.procedures}",
+        labelField: "name",
+        valueField: "id",
+        saveSelectedTo: "scheduling.selectedProcedure"
+      },
       nextStepId: "procedures-result"
     },
     {
       id: "procedures-result",
       type: "message",
-      text: "Estes são os procedimentos disponíveis:\n${conversation.catalog.procedures.data}",
+      text: "Procedimento selecionado:\nNome: ${conversation.scheduling.selectedProcedure.name}\nDescrição: ${conversation.scheduling.selectedProcedure.description}\nDuração: ${conversation.scheduling.selectedProcedure.durationMinutes} minutos\nPreço: R$ ${conversation.scheduling.selectedProcedure.price}",
       nextStepId: "continue-input"
     },
 
@@ -499,5 +519,6 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 

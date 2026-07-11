@@ -13,7 +13,8 @@ const flow = flowSchema.parse({
       { id: "id-1", name: "Barbearia" },
       { id: "id-2", name: "Salão" }
     ],
-    selectedId: null
+    selectedId: null,
+    selected: null
   },
   steps: [
     {
@@ -24,7 +25,8 @@ const flow = flowSchema.parse({
       options: {
         source: "${conversation.businesses}",
         labelField: "name",
-        valueField: "id"
+        valueField: "id",
+        saveSelectedTo: "selected"
       },
       nextStepId: "end"
     },
@@ -61,6 +63,8 @@ describe("input options", () => {
 
     const selected = await executeFlow(flow, invalid.conversation, "2");
     expect(selected.conversation.variables.selectedId).toBe("id-2");
+    expect(selected.conversation.variables.selected).toEqual({ id: "id-2", name: "Salão" });
     expect(selected.conversation.status).toBe("completed");
   });
 });
+
