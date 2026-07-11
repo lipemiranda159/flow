@@ -17,27 +17,27 @@ describe("flow engine", () => {
   it("emite o menu inicial e aguarda opção", () => {
     const result = executeFlow(exampleFlow, conversation(), "oi");
     expect(result.actions).toEqual([
-      { type: "send_message", text: "Bem-vindo a Barbearia Corte Fino!" },
+      { type: "send_message", text: "Bem-vindo ao fluxo de agendamento da UAI5 Solutions." },
       {
         type: "send_message",
-        text: "Digite uma opção:\n1 - Agendar horário\n2 - Buscar horário marcado\n3 - Ver procedimentos"
+        text: "Escolha uma opção:\n1 - Iniciar agendamento\n2 - Listar meus agendamentos\n3 - Consultar procedimentos"
       }
     ]);
     expect(result.conversation.waitingInputStepId).toBe("menu-input");
   });
 
-  it("retoma a conversa e responde procedimentos quando escolhe opção 3", () => {
+  it("retoma a conversa e inicia autenticação quando escolhe opção 3", () => {
     const first = executeFlow(exampleFlow, conversation(), "oi");
     const second = executeFlow(exampleFlow, first.conversation, "3");
     expect(second.actions).toEqual([
       {
         type: "send_message",
-        text: "Procedimentos disponíveis:\n- Corte tradicional\n- Barba completa\n- Corte + barba\n- Hidratação capilar\nSe quiser agendar, responda com 1 no menu inicial."
+        text: "Para continuar, vamos autenticar via passwordless. As chamadas seguem https://api.uai5solutions.com.br."
       },
-      { type: "send_message", text: "Deseja voltar ao menu? (sim/nao)" }
+      { type: "send_message", text: "Informe seu e-mail para solicitar o código de acesso." }
     ]);
     expect(second.conversation.status).toBe("waiting_input");
-    expect(second.conversation.waitingInputStepId).toBe("continue-input");
+    expect(second.conversation.waitingInputStepId).toBe("auth-email");
     expect(second.conversation.variables.menuOption).toBe("3");
   });
 });
