@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { WhatsAppAdapter } from "../src/infrastructure/adapters/whatsapp-adapter.js";
 import { TelegramAdapter } from "../src/infrastructure/adapters/telegram-adapter.js";
 import { AdapterFactory } from "../src/infrastructure/adapters/adapter-factory.js";
-import type { PlatformRequest } from "../src/infrastructure/adapters/platform-adapter.js";
+import type { PlatformRequest, NormalizedActions } from "../src/infrastructure/adapters/platform-adapter.js";
 
 describe("Platform Adapters", () => {
   describe("WhatsApp Adapter", () => {
@@ -14,6 +14,7 @@ describe("Platform Adapters", () => {
 
     it("deve normalizar webhook REAL da Meta corretamente", () => {
       const request: PlatformRequest = {
+        channel: "whatsapp",
         entry: [
           {
             changes: [
@@ -51,6 +52,7 @@ describe("Platform Adapters", () => {
 
     it("deve rejeitar webhook sem messages", () => {
       const request: PlatformRequest = {
+        channel: "whatsapp",
         entry: [
           {
             changes: [
@@ -71,22 +73,28 @@ describe("Platform Adapters", () => {
     });
 
     it("deve desnormalizar response para formato Meta API", () => {
-      const response = {
+      const response: NormalizedActions = {
         conversationId: "conv-123",
         status: "active",
         actions: [
-          { type: "message", text: "Olá!" },
-          { type: "message", text: "Como posso ajudar?" }
+          { type: "send_message", text: "Olá!" },
+          { type: "send_message", text: "Como posso ajudar?" }
         ],
         executedSteps: 2
       };
 
       const platformResponse = adapter.denormalizeResponse(response);
+      const whatsappResponse = platformResponse as {
+        messaging_product?: string;
+        type?: string;
+        text?: { body?: string };
+        _internal?: { conversationId?: string };
+      };
 
-      expect(platformResponse.messaging_product).toBe("whatsapp");
-      expect(platformResponse.type).toBe("text");
-      expect(platformResponse.text?.body).toContain("Olá!");
-      expect(platformResponse._internal?.conversationId).toBe("conv-123");
+      expect(whatsappResponse.messaging_product).toBe("whatsapp");
+      expect(whatsappResponse.type).toBe("text");
+      expect(whatsappResponse.text?.body).toContain("Olá!");
+      expect(whatsappResponse._internal?.conversationId).toBe("conv-123");
     });
   });
 
@@ -155,21 +163,27 @@ describe("Platform Adapters", () => {
     });
 
     it("deve desnormalizar response para formato Telegram Bot API", () => {
-      const response = {
+      const response: NormalizedActions = {
         conversationId: "conv-123",
         status: "active",
         actions: [
-          { type: "message", text: "Olá!" }
+          { type: "send_message", text: "Olá!" }
         ],
         executedSteps: 1
       };
 
       const platformResponse = adapter.denormalizeResponse(response);
+      const telegramResponse = platformResponse as {
+        method?: string;
+        text?: string;
+        parse_mode?: string;
+        _internal?: { conversationId?: string };
+      };
 
-      expect(platformResponse.method).toBe("sendMessage");
-      expect(platformResponse.text).toBe("Olá!");
-      expect(platformResponse.parse_mode).toBe("HTML");
-      expect(platformResponse._internal?.conversationId).toBe("conv-123");
+      expect(telegramResponse.method).toBe("sendMessage");
+      expect(telegramResponse.text).toBe("Olá!");
+      expect(telegramResponse.parse_mode).toBe("HTML");
+      expect(telegramResponse._internal?.conversationId).toBe("conv-123");
     });
   });
 

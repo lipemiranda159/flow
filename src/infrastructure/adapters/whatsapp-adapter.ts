@@ -90,7 +90,7 @@ export class WhatsAppAdapter implements PlatformAdapter {
 
   private formatActionsAsText(actions: any[]): string {
     return actions
-      .filter(a => a.type === "message")
+      .filter(a => a.type === "send_message")
       .map(a => a.text)
       .join("\n");
   }

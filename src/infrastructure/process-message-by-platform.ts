@@ -1,5 +1,5 @@
 import type { Flow } from "../domain/flow.js";
-import type { ConversationRepository } from "./conversation-repository.js";
+import type { ConversationRepository } from "../application/conversation-repository.js";
 import type { PlatformRequest, PlatformResponse, NormalizedActions } from "./adapters/platform-adapter.js";
 import { AdapterFactory } from "./adapters/adapter-factory.js";
 import { processMessage } from "../application/process-message.js";

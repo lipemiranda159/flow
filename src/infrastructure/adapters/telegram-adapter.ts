@@ -68,7 +68,7 @@ export class TelegramAdapter implements PlatformAdapter {
     // POST https://api.telegram.org/bot{BOT_TOKEN}/sendMessage
     
     const messageTexts = response.actions
-      .filter(a => a.type === "message")
+      .filter(a => a.type === "send_message")
       .map(a => a.text);
 
     return {

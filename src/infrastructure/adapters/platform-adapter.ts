@@ -5,7 +5,7 @@ import type { OutputAction } from "../../domain/conversation.js";
  * Ex: Webhook do WhatsApp, payload do Telegram, etc.
  */
 export interface PlatformRequest {
-  readonly channel: string;
+  readonly channel?: string;
   readonly [key: string]: unknown;
 }
 
