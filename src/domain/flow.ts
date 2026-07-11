@@ -70,6 +70,7 @@ export const flowSchema = z.object({
   entryStepId: z.string().min(1),
   defaultHttpErrorStepId: z.string().min(1).optional(),
   variables: z.record(z.string(), z.unknown()).default({}),
+  persistentVariables: z.array(z.string().min(1)).default([]),
   steps: z.array(stepSchema).min(1).max(1000)
 }).superRefine((flow, ctx) => {
   const ids = new Set<string>();
@@ -94,6 +95,7 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 export type FlowStep = z.infer<typeof stepSchema>;
 export type Expression = z.infer<typeof expressionSchema>;
+
 
 
 

@@ -4,6 +4,7 @@ import { executeFlow } from "../domain/engine.js";
 import type { Flow } from "../domain/flow.js";
 import type { ConversationRepository } from "./conversation-repository.js";
 import type { StructuredLogger } from "../infrastructure/observability/logger.js";
+import { resolveValue, setPath } from "../domain/placeholders.js";
 
 export type ProcessMessageInput = { externalUserId: string; channel: string; message?: string };
 export type ProcessMessageOutput = { conversationId: string; status: string; actions: OutputAction[]; executedSteps: number };
@@ -43,10 +44,17 @@ export async function processMessage(
 
     if (!conversation || ["completed", "failed"].includes(conversation.status)) {
       const now = new Date();
+      const variables = structuredClone(flow.variables);
+      if (conversation) {
+        for (const path of flow.persistentVariables) {
+          const value = resolveValue(`\${conversation.${path}}`, conversation.variables);
+          if (value !== undefined && value !== null) setPath(variables, path, structuredClone(value));
+        }
+      }
       conversation = {
         id: randomUUID(), externalUserId: input.externalUserId, channel: input.channel,
         flowId: flow.id, flowVersion: flow.version, currentStepId: flow.entryStepId,
-        waitingInputStepId: null, status: "active", variables: structuredClone(flow.variables),
+        waitingInputStepId: null, status: "active", variables,
         version: 1, createdAt: now, updatedAt: now
       } satisfies Conversation;
     }
@@ -101,3 +109,4 @@ export async function processMessage(
     throw error;
   }
 }
+

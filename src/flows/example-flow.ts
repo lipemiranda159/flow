@@ -6,6 +6,7 @@ export const exampleFlow = flowSchema.parse({
   version: 1,
   entryStepId: "welcome",
   defaultHttpErrorStepId: "default-http-error",
+  persistentVariables: ["auth"],
   variables: {
     menuOption: null,
     continueOption: null,
@@ -77,23 +78,30 @@ export const exampleFlow = flowSchema.parse({
       type: "set_variable",
       variable: "flowIntent",
       value: "schedule",
-      nextStepId: "auth-intro"
+      nextStepId: "auth-check"
     },
     {
       id: "set-intent-list-appointments",
       type: "set_variable",
       variable: "flowIntent",
       value: "list_appointments",
-      nextStepId: "auth-intro"
+      nextStepId: "auth-check"
     },
     {
       id: "set-intent-list-procedures",
       type: "set_variable",
       variable: "flowIntent",
       value: "list_procedures",
-      nextStepId: "auth-intro"
+      nextStepId: "auth-check"
     },
 
+    {
+      id: "auth-check",
+      type: "condition",
+      expression: { operator: "is_not_empty", left: { variable: "auth.token" } },
+      thenStepId: "intent-switch",
+      elseStepId: "auth-intro"
+    },
     {
       id: "auth-intro",
       type: "message",
@@ -519,6 +527,7 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 
 
