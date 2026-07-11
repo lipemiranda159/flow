@@ -32,6 +32,15 @@ Resposta: `Olá! Qual é o seu nome?`
 | **Telegram** | ✅ Update do Telegram | ✅ Formato Telegram Bot API | ✅ Pronto |
 | **Adicionar nova** | ⚡ Template disponível | ⚡ Template disponível | 🚀 Fácil |
 
+## Rotas recomendadas
+
+Para produção, use rotas dedicadas por plataforma no mesmo deploy:
+
+- `POST /api/webhooks/whatsapp`
+- `POST /api/webhooks/telegram`
+
+A rota `POST /api/messages/process` continua disponível como endpoint genérico para testes e integrações controladas. Nela, a API usa `channel` explícito ou tenta inferir a plataforma a partir do payload nativo.
+
 ## Testar a conversa
 
 ### WhatsApp
@@ -103,6 +112,8 @@ A API automaticamente:
 4. **Processa a conversa** (agnóstico de plataforma)
 5. **Desnormaliza a resposta** para formato específico da plataforma
 
+Em produção, prefira as rotas dedicadas para evitar ambiguidade e manter o contrato do webhook explícito.
+
 ### Fluxo Completo
 
 ```
@@ -167,7 +178,9 @@ Para integrar com webhooks REAIS:
    - [WhatsApp Cloud API Console](https://developers.facebook.com/docs/whatsapp/cloud-api/get-started)
    - [Telegram Bot API](https://core.telegram.org/bots/api#setwebhook)
 
-2. **Seu backend** recebe o webhook e faz um POST para `/api/messages/process`
+2. **A plataforma** pode chamar diretamente a rota dedicada ou seu backend pode repassar para ela:
+      - WhatsApp: `/api/webhooks/whatsapp`
+      - Telegram: `/api/webhooks/telegram`
 
 3. **Sua API** (esta) processa e retorna a resposta no formato nativo
 

@@ -1,8 +1,5 @@
 import { createServer } from "node:http";
-import { processMessageByPlatform } from "./infrastructure/process-message-by-platform.js";
-import { exampleFlow } from "./flows/example-flow.js";
-import { createConversationRepository } from "./infrastructure/repository-factory.js";
-import { AdapterFactory } from "./infrastructure/adapters/adapter-factory.js";
+import { processPlatformPayload } from "./infrastructure/process-platform-payload.js";
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -15,7 +12,9 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method !== "POST" || request.url !== "/api/messages/process") {
+  const routeChannel = getRouteChannel(request.method, request.url);
+
+  if (request.method !== "POST" || routeChannel === null) {
     response.statusCode = 404;
     response.end(JSON.stringify({ error: { code: "NOT_FOUND", message: "Rota não encontrada." } }));
     return;
@@ -37,20 +36,17 @@ const server = createServer(async (request, response) => {
       chunks.push(buffer);
     }
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
-    
-    // Detectar o channel
-    const channel = (body.channel ?? "whatsapp") as string;
-    
-    // Validar que o adapter existe
-    AdapterFactory.getAdapter(channel);
-    
-    // Processar usando o adapter específico
-    const result = await processMessageByPlatform(body, exampleFlow, createConversationRepository());
+
+    const result = await processPlatformPayload(body, routeChannel ?? undefined);
     response.statusCode = 200;
     response.end(JSON.stringify(result));
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Erro inesperado.";
-    const statusCode = errorMessage.includes("Platform adapter não encontrado") ? 400 : 500;
+    const statusCode =
+      errorMessage.includes("Platform adapter não encontrado") ||
+      errorMessage.includes("Não foi possível identificar a plataforma")
+        ? 400
+        : 500;
     response.statusCode = statusCode;
     response.end(JSON.stringify({ error: {
       code: "PROCESSING_FAILED",
@@ -62,3 +58,23 @@ const server = createServer(async (request, response) => {
 server.listen(port, () => {
   console.log(`WhatsApp Flow local: http://localhost:${port}`);
 });
+
+function getRouteChannel(method: string | undefined, url: string | undefined): string | null {
+  if (method !== "POST") {
+    return null;
+  }
+
+  if (url === "/api/messages/process") {
+    return "";
+  }
+
+  if (url === "/api/webhooks/telegram") {
+    return "telegram";
+  }
+
+  if (url === "/api/webhooks/whatsapp") {
+    return "whatsapp";
+  }
+
+  return null;
+}
