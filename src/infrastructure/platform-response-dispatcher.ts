@@ -1,4 +1,5 @@
 import type { PlatformResponse } from "./adapters/platform-adapter.js";
+import type { StructuredLogger } from "./observability/logger.js";
 
 type TelegramResponse = {
   method?: string;
@@ -14,21 +15,46 @@ type WhatsAppResponse = {
   text?: { body?: string };
 };
 
-export async function dispatchPlatformResponse(channel: string, response: PlatformResponse): Promise<void> {
+type DispatchContext = {
+  logger?: StructuredLogger;
+  correlationId: string;
+  messageId?: string;
+  userId?: string;
+  flowId?: string;
+};
+
+export async function dispatchPlatformResponse(
+  channel: string,
+  response: PlatformResponse,
+  context?: DispatchContext
+): Promise<void> {
+  const logger = context?.logger?.child({
+    correlationId: context.correlationId,
+    messageId: context.messageId,
+    userId: context.userId,
+    flowId: context.flowId
+  });
+
+  logger?.info("response_sending", {
+    channel
+  });
+
   if (channel === "telegram") {
-    await dispatchTelegramResponse(response as TelegramResponse);
+    await dispatchTelegramResponse(response as TelegramResponse, logger);
+    logger?.info("response_sent", { channel });
     return;
   }
 
   if (channel === "whatsapp") {
-    await dispatchWhatsAppResponse(response as WhatsAppResponse);
+    await dispatchWhatsAppResponse(response as WhatsAppResponse, logger);
+    logger?.info("response_sent", { channel });
     return;
   }
 
   throw new Error(`Dispatch não suportado para channel: ${channel}`);
 }
 
-async function dispatchTelegramResponse(response: TelegramResponse): Promise<void> {
+async function dispatchTelegramResponse(response: TelegramResponse, logger?: StructuredLogger): Promise<void> {
   if (!response.text) {
     return;
   }
@@ -41,6 +67,12 @@ async function dispatchTelegramResponse(response: TelegramResponse): Promise<voi
   if (response.chat_id === undefined || response.chat_id === null) {
     throw new Error("Telegram chat_id ausente na resposta desnormalizada.");
   }
+
+  const startedAt = Date.now();
+  logger?.info("external_request_started", {
+    integrationName: "telegram_send_message",
+    httpMethod: "POST"
+  });
 
   const apiResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -55,9 +87,17 @@ async function dispatchTelegramResponse(response: TelegramResponse): Promise<voi
   if (!apiResponse.ok) {
     throw new Error(`Telegram API error: ${await apiResponse.text()}`);
   }
+
+  logger?.info("external_request_completed", {
+    integrationName: "telegram_send_message",
+    httpMethod: "POST",
+    statusCode: apiResponse.status,
+    success: apiResponse.ok,
+    durationMs: Date.now() - startedAt
+  });
 }
 
-async function dispatchWhatsAppResponse(response: WhatsAppResponse): Promise<void> {
+async function dispatchWhatsAppResponse(response: WhatsAppResponse, logger?: StructuredLogger): Promise<void> {
   if (!response.text?.body) {
     return;
   }
@@ -77,6 +117,12 @@ async function dispatchWhatsAppResponse(response: WhatsAppResponse): Promise<voi
     throw new Error("WhatsApp destinatário ausente na resposta desnormalizada.");
   }
 
+  const startedAt = Date.now();
+  logger?.info("external_request_started", {
+    integrationName: "whatsapp_send_message",
+    httpMethod: "POST"
+  });
+
   const apiResponse = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
@@ -94,4 +140,12 @@ async function dispatchWhatsAppResponse(response: WhatsAppResponse): Promise<voi
   if (!apiResponse.ok) {
     throw new Error(`WhatsApp API error: ${await apiResponse.text()}`);
   }
+
+  logger?.info("external_request_completed", {
+    integrationName: "whatsapp_send_message",
+    httpMethod: "POST",
+    statusCode: apiResponse.status,
+    success: apiResponse.ok,
+    durationMs: Date.now() - startedAt
+  });
 }
