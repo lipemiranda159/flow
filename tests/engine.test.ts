@@ -14,8 +14,8 @@ function conversation(): Conversation {
 }
 
 describe("flow engine", () => {
-  it("emite o menu inicial e aguarda opção", () => {
-    const result = executeFlow(exampleFlow, conversation(), "oi");
+  it("emite o menu inicial e aguarda opção", async () => {
+    const result = await executeFlow(exampleFlow, conversation(), "oi");
     expect(result.actions).toEqual([
       { type: "send_message", text: "Bem-vindo ao fluxo de agendamento da UAI5 Solutions." },
       {
@@ -26,13 +26,13 @@ describe("flow engine", () => {
     expect(result.conversation.waitingInputStepId).toBe("menu-input");
   });
 
-  it("retoma a conversa e inicia autenticação quando escolhe opção 3", () => {
-    const first = executeFlow(exampleFlow, conversation(), "oi");
-    const second = executeFlow(exampleFlow, first.conversation, "3");
+  it("retoma a conversa e inicia autenticação quando escolhe opção 3", async () => {
+    const first = await executeFlow(exampleFlow, conversation(), "oi");
+    const second = await executeFlow(exampleFlow, first.conversation, "3");
     expect(second.actions).toEqual([
       {
         type: "send_message",
-        text: "Para continuar, vamos autenticar via passwordless. As chamadas seguem https://api.uai5solutions.com.br."
+        text: "Para continuar, preciso confirmar sua conta com um código enviado por e-mail."
       },
       { type: "send_message", text: "Informe seu e-mail para solicitar o código de acesso." }
     ]);

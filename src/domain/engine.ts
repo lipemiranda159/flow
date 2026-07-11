@@ -19,7 +19,7 @@ function evaluate(expression: Expression, variables: Record<string, unknown>): b
   return left !== null && left !== undefined && left !== "";
 }
 
-export function executeFlow(flow: Flow, original: Conversation, incomingMessage?: string): ExecutionResult {
+export async function executeFlow(flow: Flow, original: Conversation, incomingMessage?: string): Promise<ExecutionResult> {
   const conversation: Conversation = { ...original, variables: structuredClone(original.variables) };
   const actions: OutputAction[] = [];
   const steps = new Map(flow.steps.map(step => [step.id, step]));
@@ -53,6 +53,35 @@ export function executeFlow(flow: Flow, original: Conversation, incomingMessage?
     } else if (step.type === "set_variable") {
       setPath(conversation.variables, step.variable, resolveValue(step.value, conversation.variables));
       conversation.currentStepId = step.nextStepId;
+    } else if (step.type === "http_request") {
+      const resolvedHeaders = Object.fromEntries(
+        Object.entries(step.headers).map(([key, value]) => [key, renderTemplate(value, conversation.variables)])
+      );
+      const resolvedUrl = renderTemplate(step.url, conversation.variables);
+      const resolvedBody = step.body === undefined ? undefined : resolveData(step.body, conversation.variables);
+
+      const response = await fetch(resolvedUrl, {
+        method: step.method,
+        headers: resolvedHeaders,
+        body: resolvedBody === undefined ? undefined : JSON.stringify(resolvedBody)
+      });
+
+      const responseData = await parseResponseBody(response);
+      setPath(conversation.variables, step.saveTo, {
+        ok: response.ok,
+        status: response.status,
+        data: responseData
+      });
+
+      if (!response.ok) {
+        if (step.onErrorStepId) {
+          conversation.currentStepId = step.onErrorStepId;
+        } else {
+          throw new Error(`HTTP ${step.method} ${resolvedUrl} falhou com status ${response.status}`);
+        }
+      } else {
+        conversation.currentStepId = step.nextStepId;
+      }
     } else if (step.type === "condition") {
       conversation.currentStepId = evaluate(step.expression, conversation.variables) ? step.thenStepId : step.elseStepId;
     } else if (step.type === "switch") {
@@ -70,4 +99,39 @@ export function executeFlow(flow: Flow, original: Conversation, incomingMessage?
   }
   conversation.updatedAt = new Date();
   return { conversation, actions, executedSteps };
+}
+
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function resolveData(value: unknown, variables: Record<string, unknown>): unknown {
+  if (Array.isArray(value)) {
+    return value.map(item => resolveData(item, variables));
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, resolveData(item, variables)]);
+    return Object.fromEntries(entries);
+  }
+
+  if (typeof value === "string") {
+    return resolveValue(value, variables);
+  }
+
+  return value;
 }

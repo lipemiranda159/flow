@@ -22,7 +22,7 @@ export async function processMessage(
       version: 1, createdAt: now, updatedAt: now
     } satisfies Conversation;
   }
-  const result = executeFlow(flow, conversation, input.message);
+  const result = await executeFlow(flow, conversation, input.message);
   result.conversation.version += 1;
   await repository.save(result.conversation);
   return {

@@ -29,11 +29,13 @@ export const exampleFlow = flowSchema.parse({
       createResultId: null
     },
     records: {
-      businessesSummary: null,
-      proceduresSummary: null,
-      professionalsSummary: null,
-      availableTimesSummary: null,
-      appointmentsSummary: null
+      appointments: null
+    },
+    catalog: {
+      businesses: null,
+      procedures: null,
+      professionals: null,
+      availability: null
     }
   },
   steps: [
@@ -93,7 +95,7 @@ export const exampleFlow = flowSchema.parse({
     {
       id: "auth-intro",
       type: "message",
-      text: "Para continuar, vamos autenticar via passwordless. As chamadas seguem ${conversation.api.baseUrl}.",
+      text: "Para continuar, preciso confirmar sua conta com um código enviado por e-mail.",
       nextStepId: "auth-email"
     },
     {
@@ -101,12 +103,20 @@ export const exampleFlow = flowSchema.parse({
       type: "input",
       saveTo: "auth.email",
       prompt: "Informe seu e-mail para solicitar o código de acesso.",
-      nextStepId: "auth-request-instructions"
+      nextStepId: "auth-request-code"
     },
     {
-      id: "auth-request-instructions",
-      type: "message",
-      text: "Solicite o código com POST ${conversation.api.baseUrl}/api/passwordless/request usando o e-mail informado.",
+      id: "auth-request-code",
+      type: "http_request",
+      method: "POST",
+      url: "${conversation.api.baseUrl}/api/passwordless/request",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: {
+        email: "${conversation.auth.email}"
+      },
+      saveTo: "auth.request",
       nextStepId: "auth-code"
     },
     {
@@ -114,33 +124,55 @@ export const exampleFlow = flowSchema.parse({
       type: "input",
       saveTo: "auth.code",
       prompt: "Digite o código de 6 dígitos recebido por e-mail.",
-      nextStepId: "auth-login-instructions"
+      nextStepId: "auth-login"
     },
     {
-      id: "auth-login-instructions",
-      type: "message",
-      text: "Valide o código com POST ${conversation.api.baseUrl}/api/passwordless/login e capture data.token.",
-      nextStepId: "auth-token"
+      id: "auth-login",
+      type: "http_request",
+      method: "POST",
+      url: "${conversation.api.baseUrl}/api/passwordless/login",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: {
+        email: "${conversation.auth.email}",
+        code: "${conversation.auth.code}"
+      },
+      saveTo: "auth.login",
+      onErrorStepId: "auth-failed",
+      nextStepId: "auth-set-token"
     },
     {
-      id: "auth-token",
-      type: "input",
-      saveTo: "auth.token",
-      prompt: "Cole o JWT retornado em data.token.",
-      nextStepId: "auth-profile-instructions"
+      id: "auth-set-token",
+      type: "set_variable",
+      variable: "auth.token",
+      value: "${conversation.auth.login.data.data.token}",
+      nextStepId: "auth-profile"
     },
     {
-      id: "auth-profile-instructions",
-      type: "message",
-      text: "Com Authorization Bearer, faça GET ${conversation.api.baseUrl}/api/auth/profile e capture o campo nameid.",
-      nextStepId: "auth-user-id"
+      id: "auth-profile",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/auth/profile",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "auth.profile",
+      onErrorStepId: "auth-failed",
+      nextStepId: "auth-set-user"
     },
     {
-      id: "auth-user-id",
-      type: "input",
-      saveTo: "auth.userId",
-      prompt: "Informe o nameid retornado no profile (userId da sessão).",
+      id: "auth-set-user",
+      type: "set_variable",
+      variable: "auth.userId",
+      value: "${conversation.auth.profile.data.nameid}",
       nextStepId: "intent-switch"
+    },
+    {
+      id: "auth-failed",
+      type: "message",
+      text: "Não consegui validar seu acesso. Vamos tentar novamente com um novo código.",
+      nextStepId: "auth-email"
     },
 
     {
@@ -148,30 +180,29 @@ export const exampleFlow = flowSchema.parse({
       type: "switch",
       expression: { variable: "flowIntent" },
       cases: [
-        { equals: "schedule", nextStepId: "schedule-business" },
+        { equals: "schedule", nextStepId: "schedule-businesses-list-instructions" },
         { equals: "list_appointments", nextStepId: "appointments-call" },
-        { equals: "list_procedures", nextStepId: "procedures-business" }
+        { equals: "list_procedures", nextStepId: "procedures-businesses-list" }
       ],
       defaultStepId: "continue-input"
     },
 
     {
       id: "schedule-businesses-list-instructions",
-      type: "message",
-      text: "Liste estabelecimentos com GET ${conversation.api.baseUrl}/api/businesses?pageNumber=1&pageSize=10&searchTerm=. Exiba apenas opções ativas.",
-      nextStepId: "schedule-businesses-summary"
-    },
-    {
-      id: "schedule-businesses-summary",
-      type: "input",
-      saveTo: "records.businessesSummary",
-      prompt: "Cole uma lista curta de estabelecimentos no formato Nome -> businessId.",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/businesses?pageNumber=1&pageSize=10&searchTerm=",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.businesses",
+      onErrorStepId: "auth-failed",
       nextStepId: "schedule-business-select-prompt"
     },
     {
       id: "schedule-business-select-prompt",
       type: "message",
-      text: "Escolha um estabelecimento desta lista:\n${conversation.records.businessesSummary}",
+      text: "Encontrei estes estabelecimentos:\n${conversation.catalog.businesses.data.businesses}\nDigite o código (id) do estabelecimento desejado.",
       nextStepId: "schedule-business"
     },
     {
@@ -183,21 +214,20 @@ export const exampleFlow = flowSchema.parse({
     },
     {
       id: "schedule-procedure-list-instructions",
-      type: "message",
-      text: "Liste os procedimentos com GET ${conversation.api.baseUrl}/api/procedures/business/${conversation.scheduling.businessId}. Use apenas IDs retornados pela API.",
-      nextStepId: "schedule-procedures-summary"
-    },
-    {
-      id: "schedule-procedures-summary",
-      type: "input",
-      saveTo: "records.proceduresSummary",
-      prompt: "Cole os procedimentos em formato Nome (duração/preço) -> procedureId.",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/procedures/business/${conversation.scheduling.businessId}",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.procedures",
+      onErrorStepId: "auth-failed",
       nextStepId: "schedule-procedure-select-prompt"
     },
     {
       id: "schedule-procedure-select-prompt",
       type: "message",
-      text: "Escolha um procedimento desta lista:\n${conversation.records.proceduresSummary}",
+      text: "Estes são os procedimentos disponíveis:\n${conversation.catalog.procedures.data}\nDigite o código (id) do procedimento escolhido.",
       nextStepId: "schedule-procedure-id"
     },
     {
@@ -209,21 +239,20 @@ export const exampleFlow = flowSchema.parse({
     },
     {
       id: "schedule-professionals-instructions",
-      type: "message",
-      text: "Liste profissionais com GET ${conversation.api.baseUrl}/api/businesses/${conversation.scheduling.businessId}/professional e escolha somente um ID retornado.",
-      nextStepId: "schedule-professionals-summary"
-    },
-    {
-      id: "schedule-professionals-summary",
-      type: "input",
-      saveTo: "records.professionalsSummary",
-      prompt: "Cole os profissionais no formato Nome -> professionalId.",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/businesses/${conversation.scheduling.businessId}/professional",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.professionals",
+      onErrorStepId: "auth-failed",
       nextStepId: "schedule-professional-select-prompt"
     },
     {
       id: "schedule-professional-select-prompt",
       type: "message",
-      text: "Escolha um profissional desta lista:\n${conversation.records.professionalsSummary}",
+      text: "Profissionais disponíveis neste estabelecimento:\n${conversation.catalog.professionals.data.data.user}\nDigite o código (id) do profissional desejado.",
       nextStepId: "schedule-professional-id"
     },
     {
@@ -242,21 +271,20 @@ export const exampleFlow = flowSchema.parse({
     },
     {
       id: "schedule-availability-instructions",
-      type: "message",
-      text: "Consulte disponibilidade em GET ${conversation.api.baseUrl}/api/businesses/${conversation.scheduling.businessId}/professional/${conversation.scheduling.professionalId}/available/procedure/${conversation.scheduling.procedureId}?date=${conversation.scheduling.requestedDate}. Ofereça somente horários retornados em availableTimes.",
-      nextStepId: "schedule-availability-summary"
-    },
-    {
-      id: "schedule-availability-summary",
-      type: "input",
-      saveTo: "records.availableTimesSummary",
-      prompt: "Cole os horários disponíveis em formato de lista usando os valores ISO originais.",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/businesses/${conversation.scheduling.businessId}/professional/${conversation.scheduling.professionalId}/available/procedure/${conversation.scheduling.procedureId}?date=${conversation.scheduling.requestedDate}",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.availability",
+      onErrorStepId: "auth-failed",
       nextStepId: "schedule-availability-select-prompt"
     },
     {
       id: "schedule-availability-select-prompt",
       type: "message",
-      text: "Escolha um horário desta lista:\n${conversation.records.availableTimesSummary}",
+      text: "Horários disponíveis para a data escolhida:\n${conversation.catalog.availability.data.data.availableTimes}\nDigite o horário exatamente como aparece na lista.",
       nextStepId: "schedule-time"
     },
     {
@@ -270,7 +298,7 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-price",
       type: "input",
       saveTo: "scheduling.finalPrice",
-      prompt: "Informe o preço final retornado para este procedimento (não altere o valor da API).",
+      prompt: "Qual preço foi mostrado para esse procedimento?",
       nextStepId: "schedule-summary"
     },
     {
@@ -307,15 +335,33 @@ export const exampleFlow = flowSchema.parse({
     },
     {
       id: "schedule-create-instructions",
-      type: "message",
-      text: "Crie uma única vez em POST ${conversation.api.baseUrl}/api/appointment com payload appointment usando userId=${conversation.auth.userId}, businessId, professionalId, procedureId e scheduledAt selecionados. Não repita automaticamente em timeout.",
-      nextStepId: "schedule-created-id"
+      type: "http_request",
+      method: "POST",
+      url: "${conversation.api.baseUrl}/api/appointment",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}",
+        "Content-Type": "application/json"
+      },
+      body: {
+        appointment: {
+          id: "${conversation.auth.userId}",
+          userId: "${conversation.auth.userId}",
+          businessId: "${conversation.scheduling.businessId}",
+          professionalId: "${conversation.scheduling.professionalId}",
+          procedureId: "${conversation.scheduling.procedureId}",
+          scheduledAt: "${conversation.scheduling.scheduledAt}",
+          isDelivery: false
+        }
+      },
+      saveTo: "scheduling.create",
+      onErrorStepId: "schedule-create-error",
+      nextStepId: "schedule-set-created-id"
     },
     {
-      id: "schedule-created-id",
-      type: "input",
-      saveTo: "scheduling.createResultId",
-      prompt: "Informe o data.id retornado pela API após success=true.",
+      id: "schedule-set-created-id",
+      type: "set_variable",
+      variable: "scheduling.createResultId",
+      value: "${conversation.scheduling.create.data.data.id}",
       nextStepId: "schedule-created-message"
     },
     {
@@ -323,6 +369,12 @@ export const exampleFlow = flowSchema.parse({
       type: "message",
       text: "Agendamento confirmado com sucesso! ID: ${conversation.scheduling.createResultId}",
       nextStepId: "continue-input"
+    },
+    {
+      id: "schedule-create-error",
+      type: "message",
+      text: "Não consegui confirmar seu agendamento agora. Posso consultar seus agendamentos para verificar se foi criado.",
+      nextStepId: "appointments-call"
     },
     {
       id: "schedule-cancelled",
@@ -333,48 +385,64 @@ export const exampleFlow = flowSchema.parse({
 
     {
       id: "appointments-call",
-      type: "message",
-      text: "Liste seus agendamentos com GET ${conversation.api.baseUrl}/api/appointment/user usando Authorization Bearer.",
-      nextStepId: "appointments-summary"
-    },
-    {
-      id: "appointments-summary",
-      type: "input",
-      saveTo: "records.appointmentsSummary",
-      prompt: "Cole um resumo dos próximos agendamentos (ID, data, profissional, procedimento).",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/appointment/user",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "records.appointments",
+      onErrorStepId: "auth-failed",
       nextStepId: "appointments-result"
     },
     {
       id: "appointments-result",
       type: "message",
-      text: "Resumo registrado:\n${conversation.records.appointmentsSummary}",
+      text: "Aqui estão seus agendamentos:\n${conversation.records.appointments.data.data.appointments}",
       nextStepId: "continue-input"
     },
 
     {
+      id: "procedures-businesses-list",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/businesses?pageNumber=1&pageSize=10&searchTerm=",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.businesses",
+      onErrorStepId: "auth-failed",
+      nextStepId: "procedures-businesses-prompt"
+    },
+    {
+      id: "procedures-businesses-prompt",
+      type: "message",
+      text: "Para consultar procedimentos, escolha um estabelecimento:\n${conversation.catalog.businesses.data.businesses}",
+      nextStepId: "procedures-business"
+    },
+    {
       id: "procedures-business",
       type: "input",
       saveTo: "scheduling.businessId",
-      prompt: "Informe o businessId para consultar procedimentos.",
+      prompt: "Digite o businessId do estabelecimento escolhido.",
       nextStepId: "procedures-call"
     },
     {
       id: "procedures-call",
-      type: "message",
-      text: "Consulte em GET ${conversation.api.baseUrl}/api/procedures/business/${conversation.scheduling.businessId}. Apresente nome, duração e preço sem alterar os valores.",
-      nextStepId: "procedures-summary"
-    },
-    {
-      id: "procedures-summary",
-      type: "input",
-      saveTo: "records.proceduresSummary",
-      prompt: "Cole um resumo dos procedimentos retornados.",
+      type: "http_request",
+      method: "GET",
+      url: "${conversation.api.baseUrl}/api/procedures/business/${conversation.scheduling.businessId}",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "catalog.procedures",
+      onErrorStepId: "auth-failed",
       nextStepId: "procedures-result"
     },
     {
       id: "procedures-result",
       type: "message",
-      text: "Procedimentos registrados:\n${conversation.records.proceduresSummary}",
+      text: "Estes são os procedimentos disponíveis:\n${conversation.catalog.procedures.data}",
       nextStepId: "continue-input"
     },
 

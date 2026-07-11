@@ -10,7 +10,7 @@ describe("process message", () => {
     const second = await processMessage({ externalUserId: "5511999", channel: "whatsapp", message: "3" }, exampleFlow, repository);
     expect(first.status).toBe("waiting_input");
     expect(second.status).toBe("waiting_input");
-    expect(second.actions[0]?.text).toContain("autenticar via passwordless");
+    expect(second.actions[0]?.text).toContain("confirmar sua conta com um código");
     expect(second.actions[1]?.text).toContain("Informe seu e-mail");
   });
 });

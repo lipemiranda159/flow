@@ -25,6 +25,17 @@ const setVariableStep = z.object({
   id: z.string().min(1), type: z.literal("set_variable"),
   variable: z.string().min(1), value: z.unknown(), nextStepId
 });
+const httpRequestStep = z.object({
+  id: z.string().min(1),
+  type: z.literal("http_request"),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+  url: z.string().min(1),
+  headers: z.record(z.string(), z.string()).default({}),
+  body: z.unknown().optional(),
+  saveTo: z.string().min(1),
+  nextStepId,
+  onErrorStepId: z.string().min(1).optional()
+});
 const conditionStep = z.object({
   id: z.string().min(1), type: z.literal("condition"), expression: expressionSchema,
   thenStepId: nextStepId, elseStepId: nextStepId
@@ -41,7 +52,7 @@ const endStep = z.object({
 });
 
 export const stepSchema = z.discriminatedUnion("type", [
-  messageStep, inputStep, setVariableStep, conditionStep, switchStep, gotoStep, endStep
+  messageStep, inputStep, setVariableStep, httpRequestStep, conditionStep, switchStep, gotoStep, endStep
 ]);
 
 export const flowSchema = z.object({
@@ -61,6 +72,7 @@ export const flowSchema = z.object({
   const references: string[] = [];
   for (const step of flow.steps) {
     if ("nextStepId" in step) references.push(step.nextStepId);
+    if (step.type === "http_request" && step.onErrorStepId) references.push(step.onErrorStepId);
     if (step.type === "condition") references.push(step.thenStepId, step.elseStepId);
     if (step.type === "switch") references.push(step.defaultStepId, ...step.cases.map(item => item.nextStepId));
     if (step.type === "goto") references.push(step.targetStepId);
