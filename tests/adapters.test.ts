@@ -73,6 +73,10 @@ describe("Platform Adapters", () => {
     });
 
     it("deve desnormalizar response para formato Meta API", () => {
+      const request: PlatformRequest = {
+        channel: "whatsapp",
+        entry: []
+      };
       const response: NormalizedActions = {
         conversationId: "conv-123",
         status: "active",
@@ -83,15 +87,24 @@ describe("Platform Adapters", () => {
         executedSteps: 2
       };
 
-      const platformResponse = adapter.denormalizeResponse(response);
+      const platformResponse = adapter.denormalizeResponse(response, {
+        request,
+        normalizedMessage: {
+          externalUserId: "5511999999999",
+          message: "Olá",
+          metadata: { contactName: "João" }
+        }
+      });
       const whatsappResponse = platformResponse as {
         messaging_product?: string;
+        to?: string;
         type?: string;
         text?: { body?: string };
         _internal?: { conversationId?: string };
       };
 
       expect(whatsappResponse.messaging_product).toBe("whatsapp");
+      expect(whatsappResponse.to).toBe("5511999999999");
       expect(whatsappResponse.type).toBe("text");
       expect(whatsappResponse.text?.body).toContain("Olá!");
       expect(whatsappResponse._internal?.conversationId).toBe("conv-123");
@@ -163,6 +176,16 @@ describe("Platform Adapters", () => {
     });
 
     it("deve desnormalizar response para formato Telegram Bot API", () => {
+      const request: PlatformRequest = {
+        channel: "telegram",
+        update_id: 123456789,
+        message: {
+          message_id: 42,
+          from: { id: 111222333 },
+          chat: { id: 111222333 },
+          text: "Olá"
+        }
+      };
       const response: NormalizedActions = {
         conversationId: "conv-123",
         status: "active",
@@ -172,15 +195,24 @@ describe("Platform Adapters", () => {
         executedSteps: 1
       };
 
-      const platformResponse = adapter.denormalizeResponse(response);
+      const platformResponse = adapter.denormalizeResponse(response, {
+        request,
+        normalizedMessage: {
+          externalUserId: "111222333",
+          message: "Olá",
+          metadata: { telegramChatId: 111222333 }
+        }
+      });
       const telegramResponse = platformResponse as {
         method?: string;
+        chat_id?: number;
         text?: string;
         parse_mode?: string;
         _internal?: { conversationId?: string };
       };
 
       expect(telegramResponse.method).toBe("sendMessage");
+      expect(telegramResponse.chat_id).toBe(111222333);
       expect(telegramResponse.text).toBe("Olá!");
       expect(telegramResponse.parse_mode).toBe("HTML");
       expect(telegramResponse._internal?.conversationId).toBe("conv-123");
