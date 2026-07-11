@@ -19,7 +19,14 @@ const messageStep = z.object({
 });
 const inputStep = z.object({
   id: z.string().min(1), type: z.literal("input"),
-  saveTo: z.string().min(1), prompt: z.string().min(1).optional(), nextStepId
+  saveTo: z.string().min(1), prompt: z.string().min(1).optional(), nextStepId,
+  options: z.object({
+    source: z.string().min(1),
+    labelField: z.string().min(1),
+    valueField: z.string().min(1),
+    invalidMessage: z.string().min(1).default("Opção inválida. Digite o número de uma das opções."),
+    emptyMessage: z.string().min(1).default("Nenhuma opção disponível.")
+  }).optional()
 });
 const setVariableStep = z.object({
   id: z.string().min(1), type: z.literal("set_variable"),
@@ -60,6 +67,7 @@ export const flowSchema = z.object({
   name: z.string().min(1),
   version: z.number().int().positive(),
   entryStepId: z.string().min(1),
+  defaultHttpErrorStepId: z.string().min(1).optional(),
   variables: z.record(z.string(), z.unknown()).default({}),
   steps: z.array(stepSchema).min(1).max(1000)
 }).superRefine((flow, ctx) => {
@@ -69,7 +77,7 @@ export const flowSchema = z.object({
     ids.add(step.id);
   }
   if (!ids.has(flow.entryStepId)) ctx.addIssue({ code: "custom", message: "entryStepId inexistente" });
-  const references: string[] = [];
+  const references: string[] = flow.defaultHttpErrorStepId ? [flow.defaultHttpErrorStepId] : [];
   for (const step of flow.steps) {
     if ("nextStepId" in step) references.push(step.nextStepId);
     if (step.type === "http_request" && step.onErrorStepId) references.push(step.onErrorStepId);
@@ -85,3 +93,5 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 export type FlowStep = z.infer<typeof stepSchema>;
 export type Expression = z.infer<typeof expressionSchema>;
+
+

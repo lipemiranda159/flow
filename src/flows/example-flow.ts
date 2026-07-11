@@ -1,10 +1,11 @@
 import { flowSchema } from "../domain/flow.js";
 
 export const exampleFlow = flowSchema.parse({
-  id: "uai5-appointment-flow",
+  id: "schedule",
   name: "Atendimento Agendamento UAI5",
   version: 1,
   entryStepId: "welcome",
+  defaultHttpErrorStepId: "default-http-error",
   variables: {
     menuOption: null,
     continueOption: null,
@@ -197,7 +198,7 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.businesses",
       onErrorStepId: "auth-failed",
-      nextStepId: "schedule-business-select-prompt"
+      nextStepId: "schedule-business"
     },
     {
       id: "schedule-business-select-prompt",
@@ -209,7 +210,12 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-business",
       type: "input",
       saveTo: "scheduling.businessId",
-      prompt: "Digite o businessId escolhido na lista.",
+      prompt: "Encontrei estes estabelecimentos. Escolha uma opção:",
+      options: {
+        source: "${conversation.catalog.businesses.data.businesses}",
+        labelField: "name",
+        valueField: "id"
+      },
       nextStepId: "schedule-procedure-list-instructions"
     },
     {
@@ -412,7 +418,7 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.businesses",
       onErrorStepId: "auth-failed",
-      nextStepId: "procedures-businesses-prompt"
+      nextStepId: "procedures-business"
     },
     {
       id: "procedures-businesses-prompt",
@@ -424,7 +430,12 @@ export const exampleFlow = flowSchema.parse({
       id: "procedures-business",
       type: "input",
       saveTo: "scheduling.businessId",
-      prompt: "Digite o businessId do estabelecimento escolhido.",
+      prompt: "Para consultar procedimentos, escolha um estabelecimento:",
+      options: {
+        source: "${conversation.catalog.businesses.data.businesses}",
+        labelField: "name",
+        valueField: "id"
+      },
       nextStepId: "procedures-call"
     },
     {
@@ -478,6 +489,15 @@ export const exampleFlow = flowSchema.parse({
       text: "Atendimento finalizado. Quando quiser, iniciamos um novo fluxo de agendamento.",
       nextStepId: "end"
     },
+{
+      id: "default-http-error",
+      type: "message",
+      text: "Desculpe, estamos com problemas no momento. Tente novamente mais tarde.",
+      nextStepId: "default-http-error-end"
+    },
+    { id: "default-http-error-end", type: "end", reason: "http_error" },
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
+

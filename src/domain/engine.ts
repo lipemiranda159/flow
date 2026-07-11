@@ -54,7 +54,16 @@ export async function executeFlow(
       currentStepId: waiting.id,
       stepType: "input"
     });
-    setPath(conversation.variables, waiting.saveTo, incomingMessage.trim());
+    const selectedValue = waiting.options
+      ? resolveSelectedOption(waiting.options, incomingMessage.trim(), conversation.variables)
+      : incomingMessage.trim();
+    if (selectedValue === undefined) {
+      actions.push({ type: "send_message", text: waiting.options?.invalidMessage ?? "Opção inválida." });
+      const prompt = renderInputPrompt(waiting, conversation.variables);
+      if (prompt) actions.push({ type: "send_message", text: prompt });
+      return { conversation, actions, executedSteps };
+    }
+    setPath(conversation.variables, waiting.saveTo, selectedValue);
     logger?.info("flow_step_completed", {
       currentStepId: waiting.id,
       nextStepId: waiting.nextStepId,
@@ -90,11 +99,11 @@ export async function executeFlow(
         stepType: step.type
       });
     } else if (step.type === "input") {
-      if (step.prompt) {
-        const renderedPrompt = renderTemplate(step.prompt, conversation.variables);
+      const renderedPrompt = renderInputPrompt(step, conversation.variables);
+      if (renderedPrompt) {
         logger?.info("variables_resolved", {
           currentStepId: step.id,
-          templateLength: step.prompt.length,
+          templateLength: step.prompt?.length ?? 0,
           renderedLength: renderedPrompt.length
         });
         actions.push({ type: "send_message", text: renderedPrompt });
@@ -130,11 +139,26 @@ export async function executeFlow(
         httpMethod: step.method
       });
 
-      const response = await fetch(resolvedUrl, {
-        method: step.method,
-        headers: resolvedHeaders,
-        body: resolvedBody === undefined ? undefined : JSON.stringify(resolvedBody)
-      });
+      let response: Response;
+      try {
+        response = await fetch(resolvedUrl, {
+          method: step.method,
+          headers: resolvedHeaders,
+          body: resolvedBody === undefined ? undefined : JSON.stringify(resolvedBody)
+        });
+      } catch (error) {
+        setPath(conversation.variables, step.saveTo, { ok: false, status: 0, data: null });
+        const errorStepId = step.onErrorStepId ?? flow.defaultHttpErrorStepId;
+        logger?.error("external_request_failed", {
+          currentStepId: step.id,
+          integrationName: deriveIntegrationName(resolvedUrl),
+          httpMethod: step.method,
+          durationMs: Date.now() - requestStartedAt
+        }, error);
+        if (!errorStepId) throw error;
+        conversation.currentStepId = errorStepId;
+        continue;
+      }
 
       const responseData = await parseResponseBody(response);
       setPath(conversation.variables, step.saveTo, {
@@ -153,13 +177,14 @@ export async function executeFlow(
       });
 
       if (!response.ok) {
-        if (step.onErrorStepId) {
+        const errorStepId = step.onErrorStepId ?? flow.defaultHttpErrorStepId;
+        if (errorStepId) {
           logger?.warn("flow_step_completed", {
             currentStepId: step.id,
-            nextStepId: step.onErrorStepId,
+            nextStepId: errorStepId,
             stepType: step.type
           });
-          conversation.currentStepId = step.onErrorStepId;
+          conversation.currentStepId = errorStepId;
         } else {
           throw new Error(`HTTP ${step.method} ${resolvedUrl} falhou com status ${response.status}`);
         }
@@ -253,3 +278,51 @@ function deriveIntegrationName(rawUrl: string): string {
     return rawUrl;
   }
 }
+type InputOptions = {
+  source: string;
+  labelField: string;
+  valueField: string;
+  invalidMessage: string;
+  emptyMessage: string;
+};
+
+function renderInputPrompt(
+  step: { prompt?: string; options?: InputOptions },
+  variables: Record<string, unknown>
+): string | undefined {
+  const prompt = step.prompt ? renderTemplate(step.prompt, variables) : undefined;
+  if (!step.options) return prompt;
+
+  const options = resolveOptions(step.options, variables);
+  const menu = options.length === 0
+    ? step.options.emptyMessage
+    : options.map((option, index) => `${index + 1} - ${String(readOptionField(option, step.options!.labelField))}`).join("\n");
+  return prompt ? `${prompt}\n${menu}` : menu;
+}
+
+function resolveSelectedOption(
+  config: InputOptions,
+  input: string,
+  variables: Record<string, unknown>
+): unknown | undefined {
+  if (!/^\d+$/.test(input)) return undefined;
+  const selected = resolveOptions(config, variables)[Number(input) - 1];
+  if (selected === undefined) return undefined;
+  return readOptionField(selected, config.valueField);
+}
+
+function resolveOptions(config: InputOptions, variables: Record<string, unknown>): Record<string, unknown>[] {
+  const value = resolveValue(config.source, variables);
+  if (!Array.isArray(value)) throw new Error(`Fonte de opções não é uma lista: ${config.source}`);
+  return value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item));
+}
+
+function readOptionField(option: Record<string, unknown>, path: string): unknown {
+  const value = path.split(".").reduce<unknown>((current, key) => {
+    if (typeof current !== "object" || current === null || Array.isArray(current)) return undefined;
+    return (current as Record<string, unknown>)[key];
+  }, option);
+  if (value === undefined || value === null || typeof value === "object") throw new Error(`Campo de opção inválido: ${path}`);
+  return value;
+}
+

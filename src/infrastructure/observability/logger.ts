@@ -19,14 +19,17 @@ export class StructuredLogger {
   }
 
   info(event: string, context: Partial<LogContext> = {}): void {
+    console.log(`INFO: ${event}`, { ...this.baseContext, ...context });
     this.emit("info", event, context);
   }
 
   warn(event: string, context: Partial<LogContext> = {}): void {
+    console.warn(`WARN: ${event}`, { ...this.baseContext, ...context });
     this.emit("warn", event, context);
   }
 
   error(event: string, context: Partial<LogContext> = {}, error?: unknown): void {
+    console.error(`ERROR: ${event}`, { ...this.baseContext, ...context, error });
     const errorPayload = error instanceof Error
       ? {
           errorName: error.name,
