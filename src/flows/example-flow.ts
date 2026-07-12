@@ -294,7 +294,12 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-date",
       type: "input",
       saveTo: "scheduling.requestedDate",
-      prompt: "Informe a data desejada no formato YYYY-MM-DD.",
+      prompt: "Escolha a data desejada:\n1 - Hoje\n2 - Amanhã\nOu digite outra data no formato DD/MM/AAAA.",
+      transform: {
+        type: "date_pt_br_to_iso_utc",
+        allowToday: true,
+        allowTomorrow: true
+      },
       nextStepId: "schedule-availability-instructions"
     },
     {
@@ -307,7 +312,23 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.availability",
       onErrorStepId: "auth-failed",
-      nextStepId: "schedule-availability-select-prompt"
+      nextStepId: "schedule-availability-check"
+    },
+    {
+      id: "schedule-availability-check",
+      type: "condition",
+      expression: {
+        operator: "is_empty",
+        left: { variable: "catalog.availability.data.data.availableTimes" }
+      },
+      thenStepId: "schedule-no-availability",
+      elseStepId: "schedule-availability-select-prompt"
+    },
+    {
+      id: "schedule-no-availability",
+      type: "message",
+      text: "Não encontrei horários disponíveis para essa data. Escolha outra data para tentarmos novamente.",
+      nextStepId: "schedule-date"
     },
     {
       id: "schedule-availability-select-prompt",
@@ -534,6 +555,8 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
+
 
 
 

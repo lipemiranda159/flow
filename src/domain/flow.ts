@@ -27,6 +27,12 @@ const inputStep = z.object({
     saveSelectedTo: z.string().min(1).optional(),
     invalidMessage: z.string().min(1).default("Opção inválida. Digite o número de uma das opções."),
     emptyMessage: z.string().min(1).default("Nenhuma opção disponível.")
+  }).optional(),
+  transform: z.object({
+    type: z.literal("date_pt_br_to_iso_utc"),
+    allowToday: z.boolean().default(true),
+    allowTomorrow: z.boolean().default(true),
+    invalidMessage: z.string().min(1).default("Data inválida. Digite hoje, amanhã ou uma data no formato DD/MM/AAAA.")
   }).optional()
 });
 const setVariableStep = z.object({
@@ -95,6 +101,7 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 export type FlowStep = z.infer<typeof stepSchema>;
 export type Expression = z.infer<typeof expressionSchema>;
+
 
 
 

@@ -23,8 +23,14 @@ function evaluate(expression: Expression, variables: Record<string, unknown>): b
     : undefined;
   if (expression.operator === "equals") return left === right;
   if (expression.operator === "not_equals") return left !== right;
-  if (expression.operator === "is_empty") return left === null || left === undefined || left === "";
-  return left !== null && left !== undefined && left !== "";
+  if (expression.operator === "is_empty") return isEmptyValue(left);
+  return !isEmptyValue(left);
+}
+
+function isEmptyValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
 }
 
 export async function executeFlow(
@@ -57,9 +63,16 @@ export async function executeFlow(
     const selection = waiting.options
       ? resolveSelectedOption(waiting.options, incomingMessage.trim(), conversation.variables)
       : undefined;
-    const selectedValue = waiting.options ? selection?.value : incomingMessage.trim();
+    const selectedValue = waiting.options
+      ? selection?.value
+      : waiting.transform
+        ? transformInput(waiting.transform, incomingMessage.trim())
+        : incomingMessage.trim();
     if (selectedValue === undefined) {
-      actions.push({ type: "send_message", text: waiting.options?.invalidMessage ?? "Opção inválida." });
+      actions.push({
+        type: "send_message",
+        text: waiting.options?.invalidMessage ?? waiting.transform?.invalidMessage ?? "Opção inválida."
+      });
       const prompt = renderInputPrompt(waiting, conversation.variables);
       if (prompt) actions.push({ type: "send_message", text: prompt });
       return { conversation, actions, executedSteps };
@@ -330,5 +343,55 @@ function readOptionField(option: Record<string, unknown>, path: string): unknown
   if (value === undefined || value === null || typeof value === "object") throw new Error(`Campo de opção inválido: ${path}`);
   return value;
 }
+type InputTransform = {
+  type: "date_pt_br_to_iso_utc";
+  allowToday: boolean;
+  allowTomorrow: boolean;
+  invalidMessage: string;
+};
 
+function transformInput(config: InputTransform, input: string): string | undefined {
+  if (config.type !== "date_pt_br_to_iso_utc") return undefined;
+  const normalized = input.trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const today = currentDateInSaoPaulo();
+
+  if (config.allowToday && (normalized === "hoje" || normalized === "1")) {
+    return formatIsoUtcStartOfDay(today.year, today.month, today.day);
+  }
+  if (config.allowTomorrow && (normalized === "amanha" || normalized === "2")) {
+    const tomorrow = addCalendarDays(today.year, today.month, today.day, 1);
+    return formatIsoUtcStartOfDay(tomorrow.year, tomorrow.month, tomorrow.day);
+  }
+
+  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return undefined;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() !== month - 1 || candidate.getUTCDate() !== day) {
+    return undefined;
+  }
+  return formatIsoUtcStartOfDay(year, month, day);
+}
+
+function currentDateInSaoPaulo(): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const read = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(part => part.type === type)?.value);
+  return { year: read("year"), month: read("month"), day: read("day") };
+}
+
+function addCalendarDays(year: number, month: number, day: number, amount: number): { year: number; month: number; day: number } {
+  const date = new Date(Date.UTC(year, month - 1, day + amount));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function formatIsoUtcStartOfDay(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`;
+}
 
