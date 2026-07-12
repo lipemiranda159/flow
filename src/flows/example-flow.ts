@@ -283,7 +283,7 @@ export const exampleFlow = flowSchema.parse({
       saveTo: "scheduling.professionalId",
       prompt: "Profissionais disponíveis neste estabelecimento. Escolha uma opção:",
       options: {
-        source: "${conversation.catalog.professionals.data.data.professionals}",
+        source: "${conversation.catalog.professionals.data.data.users}",
         labelField: "name",
         valueField: "id",
         saveSelectedTo: "scheduling.selectedProfessional"
@@ -534,6 +534,7 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 
 
