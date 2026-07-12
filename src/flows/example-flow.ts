@@ -475,7 +475,7 @@ export const exampleFlow = flowSchema.parse({
       options: {
         source: "${conversation.records.appointments.data.data.appointments}",
         valueField: "id",
-        labelTemplate: "${option.joins.procedure.name} — ${option.scheduledAt|datetime_pt_br_wall}",
+        labelTemplate: "${option.joins.procedure.name} — ${option.scheduledAt|datetime_pt_br}",
         saveSelectedTo: "records.selectedAppointment",
         saveLabelTo: "records.selectedAppointmentLabel"
       },
@@ -633,6 +633,7 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 
 
