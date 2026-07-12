@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { createApplicationEventRepository } from "../application-event-repository-factory.js";
 export type LogLevel = "info" | "warn" | "error";
 
 type LogContext = {
@@ -12,10 +14,13 @@ type LogContext = {
 };
 
 export class StructuredLogger {
-  constructor(private readonly baseContext: Partial<LogContext> = {}) {}
+  constructor(
+    private readonly baseContext: Partial<LogContext> = {},
+    private readonly pending: Set<Promise<void>> = new Set()
+  ) {}
 
   child(context: Partial<LogContext>): StructuredLogger {
-    return new StructuredLogger({ ...this.baseContext, ...context });
+    return new StructuredLogger({ ...this.baseContext, ...context }, this.pending);
   }
 
   info(event: string, context: Partial<LogContext> = {}): void {
@@ -64,7 +69,22 @@ export class StructuredLogger {
       console.log(message);
     }
 
-    void sendToAxiomIfEnabled(payload).catch((error) => {
+this.track(createApplicationEventRepository().save({
+      id: randomUUID(),
+      level,
+      event,
+      context: payload,
+      createdAt: new Date()
+    }).catch(error => {
+      console.warn(JSON.stringify({
+        level: "warn",
+        event: "application_event_persist_failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      }));
+    }));
+
+    this.track(sendToAxiomIfEnabled(payload).catch((error) => {
       const errorPayload = {
         level: "warn",
         event: "axiom_ingest_failed",
@@ -74,7 +94,16 @@ export class StructuredLogger {
         timestamp: new Date().toISOString()
       };
       console.warn(JSON.stringify(errorPayload));
-    });
+    }));
+  }
+
+  async flush(): Promise<void> {
+    await Promise.all([...this.pending]);
+  }
+
+  private track(task: Promise<void>): void {
+    this.pending.add(task);
+    void task.finally(() => this.pending.delete(task));
   }
 }
 
@@ -147,3 +176,4 @@ async function sendToAxiomIfEnabled(payload: Record<string, unknown>): Promise<v
     throw new Error(`Axiom ingest failed with status ${response.status}`);
   }
 }
+

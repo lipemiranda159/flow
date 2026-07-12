@@ -1,4 +1,4 @@
-import { integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey(),
@@ -16,4 +16,14 @@ export const conversations = pgTable("conversations", {
 }, table => ({
   userFlowUnique: uniqueIndex("conversations_user_flow_unique")
     .on(table.externalUserId, table.channel, table.flowId)
+}));
+export const applicationEvents = pgTable("application_events", {
+  id: uuid("id").primaryKey(),
+  level: text("level").notNull(),
+  event: text("event").notNull(),
+  context: jsonb("context").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, table => ({
+  createdAtIndex: index("application_events_created_at_idx").on(table.createdAt),
+  eventIndex: index("application_events_event_idx").on(table.event)
 }));

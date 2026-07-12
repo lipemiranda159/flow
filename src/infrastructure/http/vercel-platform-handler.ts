@@ -32,6 +32,7 @@ export default async function handlePlatformWebhook(
       method: request.method
     });
     response.setHeader("Allow", "POST");
+    await logger.flush();
     response.status(405).json({ error: { code: "METHOD_NOT_ALLOWED", message: "Use POST." } });
     return;
   }
@@ -79,6 +80,7 @@ export default async function handlePlatformWebhook(
         durationMs: Date.now() - startedAt
       });
 
+      await logger.flush();
       response.status(200).json({
         ok: true,
         dispatched: true,
@@ -93,6 +95,7 @@ export default async function handlePlatformWebhook(
       durationMs: Date.now() - startedAt
     });
 
+    await logger.flush();
     response.status(200).json(result.platformResponse);
   } catch (error) {
     logger.error("message_processing_failed", {
@@ -109,6 +112,7 @@ export default async function handlePlatformWebhook(
         ? 400
         : 500;
 
+    await logger.flush();
     response.status(statusCode).json({
       error: { code: "PROCESSING_FAILED", message: errorMessage }
     });

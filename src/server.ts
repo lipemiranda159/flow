@@ -1,14 +1,37 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody } from "./infrastructure/http/read-json-body.js";
 import { validateTelegramWebhook, validateWhatsAppSignature } from "./infrastructure/http/platform-webhook-security.js";
 import { dispatchPlatformResponse } from "./infrastructure/platform-response-dispatcher.js";
 import { processPlatformPayload } from "./infrastructure/process-platform-payload.js";
+import { StructuredLogger } from "./infrastructure/observability/logger.js";
+import { createApplicationEventRepository } from "./infrastructure/application-event-repository-factory.js";
+import { isApplicationEventsAuthorized, parseApplicationEventsLimit } from "./infrastructure/http/application-events-api.js";
 
 const port = Number(process.env.PORT ?? 3000);
 
 const server = createServer(async (request, response) => {
   response.setHeader("content-type", "application/json; charset=utf-8");
+  const correlationId = randomUUID();
+  const logger = new StructuredLogger({ correlationId });
+  logger.info("http_request_received", { method: request.method, url: request.url });
+
+  const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  if (request.method === "GET" && requestUrl.pathname === "/api/logs") {
+    if (!isApplicationEventsAuthorized(request.headers)) {
+      await logger.flush();
+      response.statusCode = 401;
+      response.end(JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Credencial inválida." } }));
+      return;
+    }
+    await logger.flush();
+    const limit = parseApplicationEventsLimit(requestUrl.searchParams.get("limit") ?? undefined);
+    const events = await createApplicationEventRepository().list(limit);
+    response.statusCode = 200;
+    response.end(JSON.stringify({ events, count: events.length }));
+    return;
+  }
 
   if (request.method === "GET" && request.url === "/health") {
     response.statusCode = 200;
@@ -34,10 +57,17 @@ const server = createServer(async (request, response) => {
 
     authorizeRequest(request.headers, rawBody, routeConfig.channel);
 
-    const result = await processPlatformPayload(body, routeConfig.channel || undefined);
+    const result = await processPlatformPayload(body, routeConfig.channel || undefined, {
+      correlationId,
+      logger
+    });
 
     if (routeConfig.dispatchResponse) {
-      await dispatchPlatformResponse(result.channel, result.platformResponse);
+      await dispatchPlatformResponse(result.channel, result.platformResponse, {
+        correlationId,
+        logger
+      });
+      await logger.flush();
       response.statusCode = 200;
       response.end(JSON.stringify({
         ok: true,
@@ -48,9 +78,12 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    await logger.flush();
     response.statusCode = 200;
     response.end(JSON.stringify(result.platformResponse));
   } catch (error) {
+    logger.error("message_processing_failed", {}, error);
+    await logger.flush();
     const errorMessage = error instanceof Error ? error.message : "Erro inesperado.";
     const statusCode =
       errorMessage.includes("Platform adapter não encontrado") ||
@@ -131,3 +164,5 @@ function handleWhatsAppVerification(request: IncomingMessage, response: ServerRe
   response.statusCode = 403;
   response.end(JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Token de verificação inválido." } }));
 }
+
+
