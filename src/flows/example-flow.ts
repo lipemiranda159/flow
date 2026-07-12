@@ -25,6 +25,7 @@ export const exampleFlow = flowSchema.parse({
       procedureId: null,
       selectedProcedure: null,
       professionalId: null,
+      selectedProfessional: null,
       requestedDate: null,
       scheduledAt: null,
       finalPrice: null,
@@ -268,7 +269,7 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "catalog.professionals",
       onErrorStepId: "auth-failed",
-      nextStepId: "schedule-professional-select-prompt"
+      nextStepId: "schedule-professional-id"
     },
     {
       id: "schedule-professional-select-prompt",
@@ -280,7 +281,13 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-professional-id",
       type: "input",
       saveTo: "scheduling.professionalId",
-      prompt: "Digite o professionalId escolhido na lista.",
+      prompt: "Profissionais disponíveis neste estabelecimento. Escolha uma opção:",
+      options: {
+        source: "${conversation.catalog.professionals.data.data.professionals}",
+        labelField: "name",
+        valueField: "id",
+        saveSelectedTo: "scheduling.selectedProfessional"
+      },
       nextStepId: "schedule-date"
     },
     {
@@ -527,6 +534,7 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 
 
