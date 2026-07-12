@@ -322,7 +322,7 @@ export const exampleFlow = flowSchema.parse({
         left: { variable: "catalog.availability.data.data.availableTimes" }
       },
       thenStepId: "schedule-no-availability",
-      elseStepId: "schedule-availability-select-prompt"
+      elseStepId: "schedule-time"
     },
     {
       id: "schedule-no-availability",
@@ -340,7 +340,11 @@ export const exampleFlow = flowSchema.parse({
       id: "schedule-time",
       type: "input",
       saveTo: "scheduling.scheduledAt",
-      prompt: "Informe exatamente o horário ISO escolhido dentre os disponíveis.",
+      prompt: "Escolha um dos horários disponíveis:",
+      options: {
+        source: "${conversation.catalog.availability.data.data.availableTimes}",
+        labelFormat: "datetime_pt_br"
+      },
       nextStepId: "schedule-price"
     },
     {
@@ -555,6 +559,7 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
 
 
 

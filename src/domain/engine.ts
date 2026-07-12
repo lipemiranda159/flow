@@ -297,8 +297,9 @@ function deriveIntegrationName(rawUrl: string): string {
 }
 type InputOptions = {
   source: string;
-  labelField: string;
-  valueField: string;
+  labelField?: string;
+  valueField?: string;
+  labelFormat?: "datetime_pt_br";
   saveSelectedTo?: string;
   invalidMessage: string;
   emptyMessage: string;
@@ -314,7 +315,7 @@ function renderInputPrompt(
   const options = resolveOptions(step.options, variables);
   const menu = options.length === 0
     ? step.options.emptyMessage
-    : options.map((option, index) => `${index + 1} - ${String(readOptionField(option, step.options!.labelField))}`).join("\n");
+    : options.map((option, index) => `${index + 1} - ${formatOptionLabel(readOptionValue(option, step.options!.labelField), step.options!.labelFormat)}`).join("\n");
   return prompt ? `${prompt}\n${menu}` : menu;
 }
 
@@ -322,26 +323,45 @@ function resolveSelectedOption(
   config: InputOptions,
   input: string,
   variables: Record<string, unknown>
-): { value: unknown; option: Record<string, unknown> } | undefined {
+): { value: unknown; option: unknown } | undefined {
   if (!/^\d+$/.test(input)) return undefined;
   const selected = resolveOptions(config, variables)[Number(input) - 1];
   if (selected === undefined) return undefined;
-  return { value: readOptionField(selected, config.valueField), option: structuredClone(selected) };
+  return { value: readOptionValue(selected, config.valueField), option: structuredClone(selected) };
 }
 
-function resolveOptions(config: InputOptions, variables: Record<string, unknown>): Record<string, unknown>[] {
+function resolveOptions(config: InputOptions, variables: Record<string, unknown>): unknown[] {
   const value = resolveValue(config.source, variables);
   if (!Array.isArray(value)) throw new Error(`Fonte de opções não é uma lista: ${config.source}`);
-  return value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item));
+  return value;
 }
 
-function readOptionField(option: Record<string, unknown>, path: string): unknown {
+function readOptionValue(option: unknown, path?: string): unknown {
+  if (!path) {
+    if (option === undefined || option === null || typeof option === "object") throw new Error("Opção simples inválida");
+    return option;
+  }
   const value = path.split(".").reduce<unknown>((current, key) => {
     if (typeof current !== "object" || current === null || Array.isArray(current)) return undefined;
     return (current as Record<string, unknown>)[key];
   }, option);
   if (value === undefined || value === null || typeof value === "object") throw new Error(`Campo de opção inválido: ${path}`);
   return value;
+}
+
+function formatOptionLabel(value: unknown, format?: InputOptions["labelFormat"]): string {
+  if (format !== "datetime_pt_br") return String(value);
+  if (typeof value !== "string") throw new Error("Data/hora da opção inválida");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error(`Data/hora inválida: ${value}`);
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 type InputTransform = {
   type: "date_pt_br_to_iso_utc";
@@ -394,4 +414,5 @@ function addCalendarDays(year: number, month: number, day: number, amount: numbe
 function formatIsoUtcStartOfDay(year: number, month: number, day: number): string {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`;
 }
+
 
