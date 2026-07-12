@@ -5,11 +5,11 @@ import { flowSchema } from "../src/domain/flow.js";
 
 const flow = flowSchema.parse({
   id: "time-options", name: "Time options", version: 1, entryStepId: "time",
-  variables: { times: ["2026-07-14T12:00:00Z", "2026-07-14T12:40:00Z"], selected: null },
+  variables: { times: ["2026-07-14T12:00:00Z", "2026-07-14T12:40:00Z"], selected: null, selectedLabel: null },
   steps: [
     {
       id: "time", type: "input", saveTo: "selected", prompt: "Escolha:",
-      options: { source: "${conversation.times}", labelFormat: "datetime_pt_br" },
+      options: { source: "${conversation.times}", labelFormat: "datetime_pt_br", saveLabelTo: "selectedLabel" },
       nextStepId: "end"
     },
     { id: "end", type: "end" }
@@ -34,5 +34,7 @@ describe("time options", () => {
 
     const selected = await executeFlow(flow, first.conversation, "2");
     expect(selected.conversation.variables.selected).toBe("2026-07-14T12:40:00Z");
+    expect(selected.conversation.variables.selectedLabel).toBe("14/07/2026, 09:40");
   });
 });
+

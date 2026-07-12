@@ -81,6 +81,9 @@ export async function executeFlow(
     if (waiting.options?.saveSelectedTo && selection) {
       setPath(conversation.variables, waiting.options.saveSelectedTo, selection.option);
     }
+    if (waiting.options?.saveLabelTo && selection) {
+            setPath(conversation.variables, waiting.options.saveLabelTo, renderOptionLabel(selection.option, waiting.options));
+    }
     logger?.info("flow_step_completed", {
       currentStepId: waiting.id,
       nextStepId: waiting.nextStepId,
@@ -299,8 +302,10 @@ type InputOptions = {
   source: string;
   labelField?: string;
   valueField?: string;
-  labelFormat?: "datetime_pt_br";
+  labelFormat?: "datetime_pt_br" | "datetime_pt_br_wall";
+  labelTemplate?: string;
   saveSelectedTo?: string;
+  saveLabelTo?: string;
   invalidMessage: string;
   emptyMessage: string;
 };
@@ -315,7 +320,7 @@ function renderInputPrompt(
   const options = resolveOptions(step.options, variables);
   const menu = options.length === 0
     ? step.options.emptyMessage
-    : options.map((option, index) => `${index + 1} - ${formatOptionLabel(readOptionValue(option, step.options!.labelField), step.options!.labelFormat)}`).join("\n");
+    : options.map((option, index) => `${index + 1} - ${renderOptionLabel(option, step.options!)}`).join("\n");
   return prompt ? `${prompt}\n${menu}` : menu;
 }
 
@@ -349,9 +354,24 @@ function readOptionValue(option: unknown, path?: string): unknown {
   return value;
 }
 
+function renderOptionLabel(option: unknown, config: InputOptions): string {
+  if (!config.labelTemplate) {
+    return formatOptionLabel(readOptionValue(option, config.labelField), config.labelFormat);
+  }
+  return config.labelTemplate.replace(/\$\{option\.([a-zA-Z0-9_.-]+)(?:\|([a-z_]+))?\}/g, (_match, path: string, format?: string) => {
+    const value = readOptionValue(option, path);
+    return formatOptionLabel(value, format === "datetime_pt_br" || format === "datetime_pt_br_wall" ? format : undefined);
+  });
+}
+
 function formatOptionLabel(value: unknown, format?: InputOptions["labelFormat"]): string {
-  if (format !== "datetime_pt_br") return String(value);
+  if (!format) return String(value);
   if (typeof value !== "string") throw new Error("Data/hora da opção inválida");
+  if (format === "datetime_pt_br_wall") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!match) throw new Error(`Data/hora local inválida: ${value}`);
+    return `${match[3]}/${match[2]}/${match[1]}, ${match[4]}:${match[5]}`;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error(`Data/hora inválida: ${value}`);
   return new Intl.DateTimeFormat("pt-BR", {
@@ -414,5 +434,8 @@ function addCalendarDays(year: number, month: number, day: number, amount: numbe
 function formatIsoUtcStartOfDay(year: number, month: number, day: number): string {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`;
 }
+
+
+
 
 

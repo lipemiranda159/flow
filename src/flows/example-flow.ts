@@ -22,18 +22,25 @@ export const exampleFlow = flowSchema.parse({
     },
     scheduling: {
       businessId: null,
+      selectedBusiness: null,
       procedureId: null,
       selectedProcedure: null,
       professionalId: null,
       selectedProfessional: null,
       requestedDate: null,
       scheduledAt: null,
+      selectedTimeLabel: null,
       finalPrice: null,
       confirmation: null,
       createResultId: null
     },
     records: {
-      appointments: null
+      appointments: null,
+      selectedAppointmentId: null,
+      selectedAppointment: null,
+      selectedAppointmentLabel: null,
+      appointmentAction: null,
+      cancelResult: null
     },
     catalog: {
       businesses: null,
@@ -224,7 +231,8 @@ export const exampleFlow = flowSchema.parse({
       options: {
         source: "${conversation.catalog.businesses.data.businesses}",
         labelField: "name",
-        valueField: "id"
+        valueField: "id",
+        saveSelectedTo: "scheduling.selectedBusiness"
       },
       nextStepId: "schedule-procedure-list-instructions"
     },
@@ -343,21 +351,16 @@ export const exampleFlow = flowSchema.parse({
       prompt: "Escolha um dos horários disponíveis:",
       options: {
         source: "${conversation.catalog.availability.data.data.availableTimes}",
-        labelFormat: "datetime_pt_br"
+        labelFormat: "datetime_pt_br",
+        saveLabelTo: "scheduling.selectedTimeLabel"
       },
-      nextStepId: "schedule-price"
-    },
-    {
-      id: "schedule-price",
-      type: "input",
-      saveTo: "scheduling.finalPrice",
-      prompt: "Qual preço foi mostrado para esse procedimento?",
       nextStepId: "schedule-summary"
     },
+    
     {
       id: "schedule-summary",
       type: "message",
-      text: "Resumo para confirmação:\n- businessId: ${conversation.scheduling.businessId}\n- procedureId: ${conversation.scheduling.procedureId}\n- professionalId: ${conversation.scheduling.professionalId}\n- scheduledAt: ${conversation.scheduling.scheduledAt}\n- preço: ${conversation.scheduling.finalPrice}\nConfirme com 'sim' para criar ou 'nao' para cancelar.",
+      text: "Resumo para confirmação:\n- Estabelecimento: ${conversation.scheduling.selectedBusiness.name}\n- Procedimento: ${conversation.scheduling.selectedProcedure.name}\n- Profissional: ${conversation.scheduling.selectedProfessional.name}\n- Data e horário: ${conversation.scheduling.selectedTimeLabel}\n- Preço: R$ ${conversation.scheduling.selectedProcedure.price}\nConfirme com 'sim' para criar ou 'nao' para cancelar.",
       nextStepId: "schedule-confirmation"
     },
     {
@@ -446,13 +449,83 @@ export const exampleFlow = flowSchema.parse({
       },
       saveTo: "records.appointments",
       onErrorStepId: "auth-failed",
-      nextStepId: "appointments-result"
+      nextStepId: "appointments-check"
     },
     {
-      id: "appointments-result",
+      id: "appointments-check",
+      type: "condition",
+      expression: {
+        operator: "is_empty",
+        left: { variable: "records.appointments.data.data.appointments" }
+      },
+      thenStepId: "appointments-empty",
+      elseStepId: "appointments-select"
+    },
+    {
+      id: "appointments-empty",
       type: "message",
-      text: "Aqui estão seus agendamentos:\n${conversation.records.appointments.data.data.appointments}",
+      text: "Você não possui agendamentos no momento.",
       nextStepId: "continue-input"
+    },
+    {
+      id: "appointments-select",
+      type: "input",
+      saveTo: "records.selectedAppointmentId",
+      prompt: "Escolha um agendamento para ver os detalhes:",
+      options: {
+        source: "${conversation.records.appointments.data.data.appointments}",
+        valueField: "id",
+        labelTemplate: "${option.joins.procedure.name} — ${option.scheduledAt|datetime_pt_br_wall}",
+        saveSelectedTo: "records.selectedAppointment",
+        saveLabelTo: "records.selectedAppointmentLabel"
+      },
+      nextStepId: "appointments-summary"
+    },
+    {
+      id: "appointments-summary",
+      type: "message",
+      text: "Resumo do agendamento:\n- Procedimento e horário: ${conversation.records.selectedAppointmentLabel}\n- Estabelecimento: ${conversation.records.selectedAppointment.joins.business.name}\n- Profissional: ${conversation.records.selectedAppointment.joins.professional.name}\n- Preço: R$ ${conversation.records.selectedAppointment.joins.procedure.price}",
+      nextStepId: "appointments-action"
+    },
+    {
+      id: "appointments-action",
+      type: "input",
+      saveTo: "records.appointmentAction",
+      prompt: "O que deseja fazer?\n1 - Cancelar este agendamento\n2 - Voltar ao menu",
+      nextStepId: "appointments-action-switch"
+    },
+    {
+      id: "appointments-action-switch",
+      type: "switch",
+      expression: { variable: "records.appointmentAction" },
+      cases: [
+        { equals: "1", nextStepId: "appointments-cancel-call" },
+        { equals: "2", nextStepId: "menu-input" }
+      ],
+      defaultStepId: "appointments-action-invalid"
+    },
+    {
+      id: "appointments-action-invalid",
+      type: "message",
+      text: "Opção inválida. Digite 1 para cancelar ou 2 para voltar ao menu.",
+      nextStepId: "appointments-action"
+    },
+    {
+      id: "appointments-cancel-call",
+      type: "http_request",
+      method: "DELETE",
+      url: "${conversation.api.baseUrl}/api/appointment/${conversation.records.selectedAppointmentId}",
+      headers: {
+        Authorization: "Bearer ${conversation.auth.token}"
+      },
+      saveTo: "records.cancelResult",
+      nextStepId: "appointments-cancelled"
+    },
+    {
+      id: "appointments-cancelled",
+      type: "message",
+      text: "Agendamento cancelado com sucesso.",
+      nextStepId: "menu-input"
     },
 
     {
@@ -481,7 +554,8 @@ export const exampleFlow = flowSchema.parse({
       options: {
         source: "${conversation.catalog.businesses.data.businesses}",
         labelField: "name",
-        valueField: "id"
+        valueField: "id",
+        saveSelectedTo: "scheduling.selectedBusiness"
       },
       nextStepId: "procedures-call"
     },
@@ -559,6 +633,9 @@ export const exampleFlow = flowSchema.parse({
     { id: "end", type: "end", reason: "completed" }
   ]
 });
+
+
+
 
 
 

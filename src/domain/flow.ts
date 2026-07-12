@@ -24,8 +24,10 @@ const inputStep = z.object({
     source: z.string().min(1),
     labelField: z.string().min(1).optional(),
     valueField: z.string().min(1).optional(),
-    labelFormat: z.enum(["datetime_pt_br"] ).optional(),
+    labelFormat: z.enum(["datetime_pt_br", "datetime_pt_br_wall"] ).optional(),
+    labelTemplate: z.string().min(1).optional(),
     saveSelectedTo: z.string().min(1).optional(),
+    saveLabelTo: z.string().min(1).optional(),
     invalidMessage: z.string().min(1).default("Opção inválida. Digite o número de uma das opções."),
     emptyMessage: z.string().min(1).default("Nenhuma opção disponível.")
   }).optional(),
@@ -102,6 +104,9 @@ export const flowSchema = z.object({
 export type Flow = z.infer<typeof flowSchema>;
 export type FlowStep = z.infer<typeof stepSchema>;
 export type Expression = z.infer<typeof expressionSchema>;
+
+
+
 
 
 
